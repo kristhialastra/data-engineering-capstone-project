@@ -19,28 +19,32 @@ logger.add("/logs/silver/silver.log", format="{time:YYYY-MM-DD HH:mm:ss} | {leve
 # === Table Definitions ===
 # Typed columns na — hindi na lahat TEXT tulad ng Bronze
 # Bawat table may column name, SQL type, at description para sa COMMENT
+# Ang mga table names dito ay EXACT MATCH sa output ng silver_transform.py
 TABLES = {
-    "movies_main": {
+    "movies": {
         "columns": {
-            "id": {"type": "INTEGER", "comment": "Unique identifier ng movie mula sa TMDB"},
-            "title": {"type": "TEXT", "comment": "Opisyal na title ng movie"},
-            "release_date": {"type": "DATE", "comment": "Petsa ng release ng movie (na-cast na sa DATE)"},
-            "budget": {"type": "NUMERIC", "comment": "Production budget ng movie sa USD (na-cast na sa NUMERIC, 0 = unknown)"},
-            "revenue": {"type": "NUMERIC", "comment": "Box office revenue ng movie sa USD (na-cast na sa NUMERIC, 0 = unknown)"},
+            "movie_id": {"type": "INTEGER", "comment": "Unique identifier ng movie, deduplicated mula sa bronze.movies_main"},
+            "title": {"type": "TEXT", "comment": "Opisyal na title ng movie, trimmed"},
+            "release_date": {"type": "DATE", "comment": "Petsa ng release, na-parse mula sa mixed formats"},
+            "budget": {"type": "NUMERIC", "comment": "Budget sa USD — bronze value kung >0, else TMDB enriched value, else NULL"},
+            "revenue": {"type": "NUMERIC", "comment": "Revenue sa USD — bronze value kung >0, else TMDB enriched value, else NULL"},
         }
     },
-    "movie_extended": {
+    "movie_genres": {
         "columns": {
-            "id": {"type": "INTEGER", "comment": "Unique identifier ng movie mula sa TMDB (foreign key sa movies_main)"},
-            "genres": {"type": "TEXT", "comment": "Comma-separated list ng genres ng movie"},
-            "production_companies": {"type": "TEXT", "comment": "Mga production company na gumawa ng movie"},
-            "production_countries": {"type": "TEXT", "comment": "JSON-like string ng mga bansang pinag-produce-an ng movie"},
-            "spoken_languages": {"type": "TEXT", "comment": "JSON-like string ng mga language na ginamit sa movie"},
+            "movie_id": {"type": "INTEGER", "comment": "TMDB movie ID, foreign key sa silver.movies"},
+            "genre": {"type": "TEXT", "comment": "Isang genre ng movie — one row per genre per movie"},
+        }
+    },
+    "production_companies": {
+        "columns": {
+            "movie_id": {"type": "INTEGER", "comment": "TMDB movie ID, foreign key sa silver.movies"},
+            "company_name": {"type": "TEXT", "comment": "Pangalan ng isang production company — one row per company per movie"},
         }
     },
     "movies_enriched": {
         "columns": {
-            "movie_id": {"type": "INTEGER", "comment": "TMDB movie ID, ginagamit para i-join sa silver.movies_main"},
+            "movie_id": {"type": "INTEGER", "comment": "TMDB movie ID, ginagamit para i-join sa silver.movies"},
             "budget": {"type": "NUMERIC", "comment": "Budget mula sa TMDB API (puno ng missing values mula bronze)"},
             "revenue": {"type": "NUMERIC", "comment": "Revenue mula sa TMDB API (puno ng missing values mula bronze)"},
             "genres": {"type": "TEXT", "comment": "Genres mula sa TMDB API (puno ng NULL genres mula bronze)"},
