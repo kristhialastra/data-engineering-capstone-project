@@ -87,8 +87,7 @@ with DAG(
 
     # =============================================================
     # SILVER LAYER
-    # Typed tables + TMDB API enrichment para sa missing data
-    # transform_silver at validate_silver will be added sa next step
+    # Typed tables, TMDB API enrichment, transform, at validation
     # =============================================================
     with TaskGroup("silver_tasks") as silver_tasks:
 
@@ -126,8 +125,21 @@ with DAG(
                 "silver.production_companies.",
         )
 
-        # validate_silver will be added sa next step
-        ddl_silver >> enrich_silver >> transform_silver
+        # Task 4: Pandera schema validation ng lahat ng silver tables
+        # Column types, nullability rules, value ranges, uniqueness check
+        # Kung may failure, mag-exit(1) ang script — pipeline stops dito
+        # Hindi tayo magpo-proceed sa Gold kung hindi validated ang Silver
+        validate_silver = BashOperator(
+            task_id="validate_silver",
+            bash_command="docker exec pandas-worker python /scripts/silver/silver_validate.py",
+            doc="Pandera schema validation ng lahat ng silver tables: column types, "
+                "nullability rules, value ranges, uniqueness. SchemaError raised → "
+                "pipeline stops. Hindi tayo magpo-proceed sa Gold kung hindi validated.",
+        )
+
+        # Silver task dependencies — linear, strict ordering
+        # DDL → Enrich (TMDB API) → Transform (clean/dedup/explode) → Validate
+        ddl_silver >> enrich_silver >> transform_silver >> validate_silver
 
     # =============================================================
     # GOLD LAYER (to be added)
