@@ -97,8 +97,8 @@ with DAG(
         ddl_silver = BashOperator(
             task_id="ddl_silver",
             bash_command="docker exec pandas-worker python /scripts/silver/silver_ddl.py",
-            doc="Gawa ng silver schema at typed tables (movies_main, movie_extended, "
-                "movies_enriched). With COMMENTs.",
+            doc="Gawa ng silver schema at typed tables (movies, movie_genres, "
+                "production_companies, movies_enriched). With COMMENTs.",
         )
 
         # Task 2: TMDB API enrichment para sa movies na may missing budget/revenue/genres
