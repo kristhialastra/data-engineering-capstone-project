@@ -21,10 +21,15 @@ logger.add("/logs/silver/silver.log", format="{time:YYYY-MM-DD HH:mm:ss} | {leve
 # === Pandera Schemas ===
 # Isa-isang schema para sa bawat silver table
 # strict=True — mag-fail kung may extra o kulang na columns
+# movie_id: walang dtype check — nullable=False lang
+#   Bakit: PostgreSQL INTEGER → int64 pag walang NULLs, pero float64 pag may NULLs
+#   Kung i-check natin pa.Column(int), mag-fail ng "expected int got float" kapag may NULL
+#   — nakakalito. nullable=False catches NULLs clearly ("non-nullable contains null").
+#   Check 3 at Check 4 ang nag-ga-guarantee ng type safety ng movie_id.
 SCHEMAS = {
     "movies": pa.DataFrameSchema(
         columns={
-            "movie_id": pa.Column(int, nullable=False),
+            "movie_id": pa.Column(nullable=False),
             "title": pa.Column(object, nullable=True),
             "release_date": pa.Column("datetime64[ns]", nullable=True),
             "budget": pa.Column(float, nullable=True),
@@ -34,21 +39,21 @@ SCHEMAS = {
     ),
     "movie_genres": pa.DataFrameSchema(
         columns={
-            "movie_id": pa.Column(int, nullable=False),
+            "movie_id": pa.Column(nullable=False),
             "genre": pa.Column(object, nullable=False),
         },
         strict=True,
     ),
     "production_companies": pa.DataFrameSchema(
         columns={
-            "movie_id": pa.Column(int, nullable=False),
+            "movie_id": pa.Column(nullable=False),
             "company_name": pa.Column(object, nullable=False),
         },
         strict=True,
     ),
     "movies_enriched": pa.DataFrameSchema(
         columns={
-            "movie_id": pa.Column(int, nullable=False),
+            "movie_id": pa.Column(nullable=False),
             "budget": pa.Column(float, nullable=True),
             "revenue": pa.Column(float, nullable=True),
             "genres": pa.Column(object, nullable=True),
@@ -197,7 +202,7 @@ def check_5_value_ranges(engine):
     )
     logger.info(f"  Check 5a PASSED — 0 negative budgets")
 
-    # 5a: Revenue >= 0
+    # 5b: Revenue >= 0
     with engine.connect() as conn:
         result = conn.execute(
             text("SELECT COUNT(*) FROM silver.movies WHERE revenue < 0")
@@ -208,7 +213,7 @@ def check_5_value_ranges(engine):
         f"{neg_revenue} negative revenue(s) found sa silver.movies — "
         f"revenue must be >= 0"
     )
-    logger.info(f"  Check 5a PASSED — 0 negative revenues")
+    logger.info(f"  Check 5b PASSED — 0 negative revenues")
 
     # 5b: No empty strings sa genre
     with engine.connect() as conn:
