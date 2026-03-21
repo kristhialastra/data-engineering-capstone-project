@@ -31,7 +31,7 @@ SCHEMAS = {
         columns={
             "movie_id": pa.Column(nullable=False),
             "title": pa.Column(object, nullable=True),
-            "release_date": pa.Column("datetime64[ns]", nullable=True),
+            "release_date": pa.Column(object, nullable=True),  # PostgreSQL DATE loads as object, not datetime64
             "budget": pa.Column(float, nullable=True),
             "revenue": pa.Column(float, nullable=True),
         },
