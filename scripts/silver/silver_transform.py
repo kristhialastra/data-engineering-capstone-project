@@ -72,6 +72,10 @@ def transform_movies(engine, df_main, df_enriched):
     logger.info("--- Simula ng silver.movies transform ---")
 
     # Step 4a: Deduplicate sa id column — keep first occurrence
+    # Convert id to numeric first to handle any non-numeric values
+    df_main["id"] = pd.to_numeric(df_main["id"], errors="coerce")
+    # Drop rows with NULL ids (can't dedupe on NULL)
+    df_main = df_main.dropna(subset=["id"])
     rows_before = len(df_main)
     df_main = df_main.drop_duplicates(subset=["id"], keep="first")
     rows_after = len(df_main)
@@ -94,14 +98,16 @@ def transform_movies(engine, df_main, df_enriched):
     null_count = parsed_date.isna().sum()
     logger.info(f"Date parsing: {parsed_count} parsed, {null_count} still NULL")
 
-    df_main["release_date"] = parsed_date
+    # Explicitly cast to datetime64[ns] — pandas sometimes keeps as object
+    df_main["release_date"] = pd.to_datetime(parsed_date, errors="coerce")
 
-    # Step 4c: Cast budget, revenue, at id mula TEXT → NUMERIC bago mag-merge
+    # Step 4c: Cast budget at revenue mula TEXT → NUMERIC bago mag-merge
     # 0 means unknown — palitan ng NaN para ma-fill ng enrichment
-    # Cast IN-PLACE sa df_main para index-aligned ang merge result
     df_main["budget"] = pd.to_numeric(df_main["budget"], errors="coerce").replace(0, pd.NA)
     df_main["revenue"] = pd.to_numeric(df_main["revenue"], errors="coerce").replace(0, pd.NA)
-    df_main["id"] = pd.to_numeric(df_main["id"], errors="coerce")
+    # id was already converted to numeric sa Step 4a
+    # Ensure id is integer type (no NaNs at this point)
+    df_main["id"] = df_main["id"].astype("Int64")
 
     # Step 4d: Merge with silver.movies_enriched (LEFT JOIN)
     df_merged = df_main.merge(
@@ -153,6 +159,8 @@ def transform_movie_genres(engine, df_extended, df_enriched):
 
     # Step 5a: Merge genres with enrichment para sa NULL filling
     df_extended["id"] = pd.to_numeric(df_extended["id"], errors="coerce")
+    # Drop rows with NULL ids (can't merge on NULL)
+    df_extended = df_extended.dropna(subset=["id"])
 
     df_genres = df_extended[["id", "genres"]].copy()
     df_genres = df_genres.merge(
@@ -169,7 +177,8 @@ def transform_movie_genres(engine, df_extended, df_enriched):
     df_genres["genres_final"] = bronze_genres.where(bronze_genres != "", enriched_genres)
 
     # Step 5b: Filter out rows na walang genres kahit after enrichment
-    df_genres = df_genres[df_genres["genres_final"] != ""].copy()
+    # Also filter out NULL ids
+    df_genres = df_genres[(df_genres["genres_final"] != "") & (df_genres["id"].notna())].copy()
 
     # Step 5c: Explode — split comma-separated, one row per genre
     df_genres["genre"] = df_genres["genres_final"].str.split(",")
@@ -212,6 +221,8 @@ def transform_production_companies(engine, df_extended):
     # Step 6a: Parse id to integer
     df_companies = df_extended[["id", "production_companies"]].copy()
     df_companies["id"] = pd.to_numeric(df_companies["id"], errors="coerce")
+    # Drop rows with NULL ids
+    df_companies = df_companies.dropna(subset=["id"])
 
     # Filter out rows na walang production companies
     df_companies = df_companies[
