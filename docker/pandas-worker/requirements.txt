@@ -10,3 +10,4 @@ pandera==0.18.0                # Data validation at schema enforcement
 multimethod==1.9.1             # Pinned para sa pandera==0.18.0 compatibility (v2.0+ ay may breaking change)
 loguru==0.7.2                  # Logging library para sa structured logs
 requests==2.31.0               # HTTP requests para sa TMDB API calls
+pycountry==23.12.11            # ISO country at language code lookups (English names)
