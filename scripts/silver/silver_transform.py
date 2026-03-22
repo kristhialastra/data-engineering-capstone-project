@@ -2,30 +2,45 @@
 Silver Transform Script
 Nagta-transform ng Bronze raw data papunta sa clean Silver tables.
 Cast types, dedup, parse mixed date formats, merge TMDB enrichment,
-explode genres at production companies sa separate tables.
+explode genres, production companies, producing countries, at spoken languages
+sa separate tables.
 
 Output tables:
 - silver.movies — deduplicated, typed, enriched movies
 - silver.movie_genres — one row per movie-genre pair
 - silver.production_companies — one row per movie-company pair
+- silver.producing_countries — one row per movie-country pair (English names via pycountry)
+- silver.spoken_languages — one row per movie-language pair (English names via pycountry)
 """
 
+import ast
 import os
 import sys
 import pandas as pd
+import pycountry
 from loguru import logger
 from sqlalchemy import create_engine, text
 
 # === Loguru Configuration ===
-# Dalawang sinks: stdout para sa real-time monitoring, file para sa audit trail
 logger.remove()
 logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}")
 logger.add("/logs/silver/silver.log", format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", rotation="10 MB")
 
 # === Output Tables ===
-# Tatlong tables na sisimulan ng transform — ginagamit para sa TRUNCATE at verify
-# DDL at COMMENTs ay nasa silver_ddl.py na — dito, table names lang ang kailangan
-OUTPUT_TABLES = ["movies", "movie_genres", "production_companies"]
+OUTPUT_TABLES = ["movies", "movie_genres", "production_companies", "producing_countries", "spoken_languages"]
+
+# === Manual Fallback Maps ===
+# Para sa ISO codes na wala sa pycountry (historic at non-standard)
+COUNTRY_FALLBACK = {
+    "SU": "Soviet Union",
+    "XC": "Czechoslovakia",
+    "XG": "East Germany",
+    "YU": "Yugoslavia",
+}
+LANGUAGE_FALLBACK = {
+    "cn": "Cantonese",
+    "xx": "No Language",
+}
 
 
 def get_engine():
@@ -61,7 +76,56 @@ def load_source_data(engine):
         df_enriched = pd.read_sql(text("SELECT * FROM silver.movies_enriched"), conn)
         logger.info(f"Loaded silver.movies_enriched: {len(df_enriched)} rows")
 
+    # Dedup enriched data sa movie_id — safety net kung nag-double run ang enrichment
+    before = len(df_enriched)
+    df_enriched = df_enriched.drop_duplicates(subset=["movie_id"], keep="first")
+    after = len(df_enriched)
+    if before != after:
+        logger.warning(f"Na-dedup ang movies_enriched: {before} → {after} rows ({before - after} duplicates removed)")
+
     return df_main, df_extended, df_enriched
+
+
+def parse_json_column(value):
+    """
+    Parse Python-style dict string mula sa bronze (single-quoted, not valid JSON).
+    Gamitin ang ast.literal_eval — hindi json.loads.
+
+    Edge cases na hina-handle:
+    - NULL / None / empty string → []
+    - "[]" → []
+    - Garbage float values (e.g. "6.0") → isinstance check → []
+    - Malformed string → try/except → []
+    """
+    if not value or not str(value).strip():
+        return []
+    try:
+        result = ast.literal_eval(str(value))
+        return result if isinstance(result, list) else []
+    except Exception:
+        return []
+
+
+def get_country_name(iso_code):
+    """
+    I-lookup ang English country name mula sa ISO 3166-1 alpha-2 code.
+    Gumagamit ng pycountry; fallback sa COUNTRY_FALLBACK para sa historic codes.
+    """
+    c = pycountry.countries.get(alpha_2=iso_code)
+    if c:
+        return c.name
+    return COUNTRY_FALLBACK.get(iso_code, iso_code)
+
+
+def get_language_name(iso_code):
+    """
+    I-lookup ang English language name mula sa ISO 639-1 code.
+    Gumagamit ng pycountry; fallback sa LANGUAGE_FALLBACK para sa non-standard codes.
+    """
+    lang = pycountry.languages.get(alpha_2=iso_code)
+    if lang:
+        return lang.name
+    return LANGUAGE_FALLBACK.get(iso_code, iso_code)
 
 
 def transform_movies(engine, df_main, df_enriched):
@@ -71,45 +135,24 @@ def transform_movies(engine, df_main, df_enriched):
     """
     logger.info("--- Simula ng silver.movies transform ---")
 
-    # Step 4a: Deduplicate sa id column — keep first occurrence
-    # Convert id to numeric first to handle any non-numeric values
     df_main["id"] = pd.to_numeric(df_main["id"], errors="coerce")
-    # Drop rows with NULL ids (can't dedupe on NULL)
     df_main = df_main.dropna(subset=["id"])
     rows_before = len(df_main)
     df_main = df_main.drop_duplicates(subset=["id"], keep="first")
     rows_after = len(df_main)
-    logger.info(
-        f"Dedup: {rows_before} → {rows_after} rows "
-        f"({rows_before - rows_after} duplicates removed)"
-    )
+    logger.info(f"Dedup: {rows_before} → {rows_after} rows ({rows_before - rows_after} duplicates removed)")
 
-    # Step 4b: Parse release_date — 3 mixed formats, coalesce results
-    # Format 1: MM/DD/YYYY
     date_fmt1 = pd.to_datetime(df_main["release_date"], format="%m/%d/%Y", errors="coerce")
-    # Format 2: YYYY-MM-DD
     date_fmt2 = pd.to_datetime(df_main["release_date"], format="%Y-%m-%d", errors="coerce")
-    # Format 3: DD-MM-YYYY
     date_fmt3 = pd.to_datetime(df_main["release_date"], format="%d-%m-%Y", errors="coerce")
-    # Coalesce — kuhanin ang unang successful parse
     parsed_date = date_fmt1.fillna(date_fmt2).fillna(date_fmt3)
-
-    parsed_count = parsed_date.notna().sum()
-    null_count = parsed_date.isna().sum()
-    logger.info(f"Date parsing: {parsed_count} parsed, {null_count} still NULL")
-
-    # Explicitly cast to datetime64[ns] — pandas sometimes keeps as object
+    logger.info(f"Date parsing: {parsed_date.notna().sum()} parsed, {parsed_date.isna().sum()} still NULL")
     df_main["release_date"] = pd.to_datetime(parsed_date, errors="coerce")
 
-    # Step 4c: Cast budget at revenue mula TEXT → NUMERIC bago mag-merge
-    # 0 means unknown — palitan ng NaN para ma-fill ng enrichment
     df_main["budget"] = pd.to_numeric(df_main["budget"], errors="coerce").replace(0, pd.NA)
     df_main["revenue"] = pd.to_numeric(df_main["revenue"], errors="coerce").replace(0, pd.NA)
-    # id was already converted to numeric sa Step 4a
-    # Ensure id is integer type (no NaNs at this point)
     df_main["id"] = df_main["id"].astype("Int64")
 
-    # Step 4d: Merge with silver.movies_enriched (LEFT JOIN)
     df_merged = df_main.merge(
         df_enriched[["movie_id", "budget", "revenue"]],
         left_on="id",
@@ -118,22 +161,17 @@ def transform_movies(engine, df_main, df_enriched):
         suffixes=("_bronze", "_enriched"),
     )
 
-    # Fill missing: bronze value muna, kung wala, enriched value
-    # Gamit ang suffixed columns mula sa merge — index-aligned, hindi .values
     df_merged["budget"] = df_merged["budget_bronze"].fillna(df_merged["budget_enriched"])
     df_merged.loc[df_merged["budget"] == 0, "budget"] = pd.NA
 
     df_merged["revenue"] = df_merged["revenue_bronze"].fillna(df_merged["revenue_enriched"])
     df_merged.loc[df_merged["revenue"] == 0, "revenue"] = pd.NA
 
-    # Step 4e: Trim title
     df_merged["title"] = df_merged["title"].str.strip()
 
-    # Step 4f: Build final DataFrame
     df_movies = df_merged[["id", "title", "release_date", "budget", "revenue"]].copy()
     df_movies = df_movies.rename(columns={"id": "movie_id"})
 
-    # Step 4g: Write sa silver.movies
     df_movies.to_sql(
         name="movies",
         schema="silver",
@@ -144,7 +182,6 @@ def transform_movies(engine, df_main, df_enriched):
         chunksize=5000,
     )
     logger.info(f"Na-insert ang {len(df_movies)} rows sa silver.movies")
-
     assert len(df_movies) > 0, "Zero rows sa silver.movies — may problema sa transform"
 
     return df_movies
@@ -157,9 +194,7 @@ def transform_movie_genres(engine, df_extended, df_enriched):
     """
     logger.info("--- Simula ng silver.movie_genres transform ---")
 
-    # Step 5a: Merge genres with enrichment para sa NULL filling
     df_extended["id"] = pd.to_numeric(df_extended["id"], errors="coerce")
-    # Drop rows with NULL ids (can't merge on NULL)
     df_extended = df_extended.dropna(subset=["id"])
 
     df_genres = df_extended[["id", "genres"]].copy()
@@ -171,30 +206,20 @@ def transform_movie_genres(engine, df_extended, df_enriched):
         suffixes=("_bronze", "_enriched"),
     )
 
-    # Fill NULL/empty bronze genres with enriched genres
     bronze_genres = df_genres["genres_bronze"].fillna("").str.strip()
     enriched_genres = df_genres["genres_enriched"].fillna("").str.strip()
     df_genres["genres_final"] = bronze_genres.where(bronze_genres != "", enriched_genres)
 
-    # Step 5b: Filter out rows na walang genres kahit after enrichment
-    # Also filter out NULL ids
     df_genres = df_genres[(df_genres["genres_final"] != "") & (df_genres["id"].notna())].copy()
 
-    # Step 5c: Explode — split comma-separated, one row per genre
     df_genres["genre"] = df_genres["genres_final"].str.split(",")
     df_exploded = df_genres[["id", "genre"]].explode("genre")
     df_exploded["genre"] = df_exploded["genre"].str.strip()
+    df_exploded = df_exploded[df_exploded["genre"].notna() & (df_exploded["genre"] != "")].copy()
 
-    # Drop empty strings at NULLs after explode
-    df_exploded = df_exploded[
-        df_exploded["genre"].notna() & (df_exploded["genre"] != "")
-    ].copy()
-
-    # Step 5d: Rename at finalize
     df_exploded = df_exploded.rename(columns={"id": "movie_id"})
     df_exploded = df_exploded[["movie_id", "genre"]]
 
-    # Step 5e: Write sa silver.movie_genres
     df_exploded.to_sql(
         name="movie_genres",
         schema="silver",
@@ -205,7 +230,6 @@ def transform_movie_genres(engine, df_extended, df_enriched):
         chunksize=5000,
     )
     logger.info(f"Na-insert ang {len(df_exploded)} rows sa silver.movie_genres")
-
     assert len(df_exploded) > 0, "Zero rows sa silver.movie_genres — may problema sa explode"
 
     return df_exploded
@@ -218,33 +242,23 @@ def transform_production_companies(engine, df_extended):
     """
     logger.info("--- Simula ng silver.production_companies transform ---")
 
-    # Step 6a: Parse id to integer
     df_companies = df_extended[["id", "production_companies"]].copy()
     df_companies["id"] = pd.to_numeric(df_companies["id"], errors="coerce")
-    # Drop rows with NULL ids
     df_companies = df_companies.dropna(subset=["id"])
 
-    # Filter out rows na walang production companies
     df_companies = df_companies[
         df_companies["production_companies"].notna()
         & (df_companies["production_companies"].str.strip() != "")
     ].copy()
 
-    # Step 6b: Explode — split comma-separated, one row per company
     df_companies["company_name"] = df_companies["production_companies"].str.split(",")
     df_exploded = df_companies[["id", "company_name"]].explode("company_name")
     df_exploded["company_name"] = df_exploded["company_name"].str.strip()
+    df_exploded = df_exploded[df_exploded["company_name"].notna() & (df_exploded["company_name"] != "")].copy()
 
-    # Drop empty strings at NULLs after explode
-    df_exploded = df_exploded[
-        df_exploded["company_name"].notna() & (df_exploded["company_name"] != "")
-    ].copy()
-
-    # Step 6c: Rename at finalize
     df_exploded = df_exploded.rename(columns={"id": "movie_id"})
     df_exploded = df_exploded[["movie_id", "company_name"]]
 
-    # Step 6d: Write sa silver.production_companies
     df_exploded.to_sql(
         name="production_companies",
         schema="silver",
@@ -255,10 +269,173 @@ def transform_production_companies(engine, df_extended):
         chunksize=5000,
     )
     logger.info(f"Na-insert ang {len(df_exploded)} rows sa silver.production_companies")
-
     assert len(df_exploded) > 0, "Zero rows sa silver.production_companies — may problema sa explode"
 
     return df_exploded
+
+
+def transform_producing_countries(engine, df_extended, df_enriched):
+    """
+    Transform bronze.movie_extended production_countries → silver.producing_countries.
+    Parse Python-style JSON, fill NULLs from enrichment, explode,
+    look up English country names via pycountry (+ manual fallback for historic codes).
+    One row per movie-country pair.
+    """
+    logger.info("--- Simula ng silver.producing_countries transform ---")
+
+    df_countries = df_extended[["id", "production_countries"]].copy()
+    df_countries["id"] = pd.to_numeric(df_countries["id"], errors="coerce")
+    df_countries = df_countries.dropna(subset=["id"])
+
+    # Merge with enrichment to fill empty arrays
+    # enriched production_countries is pipe-delimited "ISO:name" pairs
+    df_countries = df_countries.merge(
+        df_enriched[["movie_id", "production_countries"]].rename(
+            columns={"production_countries": "production_countries_enriched"}
+        ),
+        left_on="id",
+        right_on="movie_id",
+        how="left",
+    )
+
+    rows = []
+    for _, row in df_countries.iterrows():
+        movie_id = int(row["id"])
+
+        # Try bronze first
+        parsed = parse_json_column(row["production_countries"])
+
+        # If bronze empty, try enrichment pipe-delimited string
+        if not parsed:
+            enriched_raw = row.get("production_countries_enriched", "")
+            if enriched_raw and isinstance(enriched_raw, str) and enriched_raw.strip():
+                for pair in enriched_raw.split("|"):
+                    parts = pair.split(":", 1)
+                    if len(parts) == 2 and parts[0].strip():
+                        iso = parts[0].strip()
+                        rows.append({
+                            "movie_id": movie_id,
+                            "iso_country_code": iso,
+                            "country_name": get_country_name(iso),
+                        })
+            continue
+
+        # Parse bronze JSON array
+        for entry in parsed:
+            iso = entry.get("iso_3166_1", "").strip()
+            if not iso:
+                continue
+            rows.append({
+                "movie_id": movie_id,
+                "iso_country_code": iso,
+                "country_name": get_country_name(iso),
+            })
+
+    df_result = pd.DataFrame(rows)
+
+    if df_result.empty:
+        raise AssertionError("Zero rows sa silver.producing_countries — may problema sa parse")
+
+    # Drop any rows with empty iso or name (should not happen but safety net)
+    df_result = df_result[
+        df_result["iso_country_code"].notna() & (df_result["iso_country_code"] != "")
+        & df_result["country_name"].notna() & (df_result["country_name"] != "")
+    ].copy()
+
+    df_result.to_sql(
+        name="producing_countries",
+        schema="silver",
+        con=engine,
+        if_exists="append",
+        index=False,
+        method="multi",
+        chunksize=5000,
+    )
+    logger.info(f"Na-insert ang {len(df_result)} rows sa silver.producing_countries")
+    assert len(df_result) > 0, "Zero rows sa silver.producing_countries — may problema sa transform"
+
+    return df_result
+
+
+def transform_spoken_languages(engine, df_extended, df_enriched):
+    """
+    Transform bronze.movie_extended spoken_languages → silver.spoken_languages.
+    Parse Python-style JSON, fill NULLs from enrichment, explode,
+    look up English language names via pycountry (+ manual fallback for cn, xx).
+    One row per movie-language pair.
+    """
+    logger.info("--- Simula ng silver.spoken_languages transform ---")
+
+    df_langs = df_extended[["id", "spoken_languages"]].copy()
+    df_langs["id"] = pd.to_numeric(df_langs["id"], errors="coerce")
+    df_langs = df_langs.dropna(subset=["id"])
+
+    # Merge with enrichment to fill empty arrays
+    df_langs = df_langs.merge(
+        df_enriched[["movie_id", "spoken_languages"]].rename(
+            columns={"spoken_languages": "spoken_languages_enriched"}
+        ),
+        left_on="id",
+        right_on="movie_id",
+        how="left",
+    )
+
+    rows = []
+    for _, row in df_langs.iterrows():
+        movie_id = int(row["id"])
+
+        # Try bronze first
+        parsed = parse_json_column(row["spoken_languages"])
+
+        # If bronze empty, try enrichment pipe-delimited string
+        if not parsed:
+            enriched_raw = row.get("spoken_languages_enriched", "")
+            if enriched_raw and isinstance(enriched_raw, str) and enriched_raw.strip():
+                for pair in enriched_raw.split("|"):
+                    parts = pair.split(":", 1)
+                    if len(parts) == 2 and parts[0].strip():
+                        iso = parts[0].strip()
+                        rows.append({
+                            "movie_id": movie_id,
+                            "iso_language_code": iso,
+                            "language_name": get_language_name(iso),
+                        })
+            continue
+
+        # Parse bronze JSON array
+        for entry in parsed:
+            iso = entry.get("iso_639_1", "").strip()
+            if not iso:
+                continue
+            rows.append({
+                "movie_id": movie_id,
+                "iso_language_code": iso,
+                "language_name": get_language_name(iso),
+            })
+
+    df_result = pd.DataFrame(rows)
+
+    if df_result.empty:
+        raise AssertionError("Zero rows sa silver.spoken_languages — may problema sa parse")
+
+    df_result = df_result[
+        df_result["iso_language_code"].notna() & (df_result["iso_language_code"] != "")
+        & df_result["language_name"].notna() & (df_result["language_name"] != "")
+    ].copy()
+
+    df_result.to_sql(
+        name="spoken_languages",
+        schema="silver",
+        con=engine,
+        if_exists="append",
+        index=False,
+        method="multi",
+        chunksize=5000,
+    )
+    logger.info(f"Na-insert ang {len(df_result)} rows sa silver.spoken_languages")
+    assert len(df_result) > 0, "Zero rows sa silver.spoken_languages — may problema sa transform"
+
+    return df_result
 
 
 def verify_counts(engine):
@@ -275,7 +452,6 @@ def verify_counts(engine):
             count = result.scalar()
         counts[table_name] = count
         logger.info(f"silver.{table_name}: {count} rows")
-
         assert count > 0, f"silver.{table_name} may 0 rows — may problema sa transform"
 
     return counts
@@ -292,23 +468,15 @@ def main():
         engine = get_engine()
         logger.info("Database connection established")
 
-        # Step 1: TRUNCATE lahat ng output tables — idempotent
-        # Tables na-create na ng silver_ddl.py — hindi na kailangan i-create dito
         truncate_output_tables(engine)
-
-        # Step 2: Load source data
         df_main, df_extended, df_enriched = load_source_data(engine)
 
-        # Step 3: Transform at write silver.movies
         transform_movies(engine, df_main, df_enriched)
-
-        # Step 4: Transform at write silver.movie_genres
         transform_movie_genres(engine, df_extended, df_enriched)
-
-        # Step 5: Transform at write silver.production_companies
         transform_production_companies(engine, df_extended)
+        transform_producing_countries(engine, df_extended, df_enriched)
+        transform_spoken_languages(engine, df_extended, df_enriched)
 
-        # Step 6: Final verification
         verify_counts(engine)
 
         engine.dispose()
@@ -323,6 +491,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        # Non-zero exit code para ma-detect ng Airflow BashOperator ang failure
         logger.error(f"Unhandled exception: {e}")
         sys.exit(1)
