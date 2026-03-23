@@ -396,16 +396,8 @@ def transform_movie_genres(engine, df_extended, df_enriched):
     df_exploded = df_exploded.rename(columns={"id": "movie_id"})
     df_exploded = df_exploded[["movie_id", "genre"]]
 
-    df_exploded.to_sql(
-        name="movie_genres",
-        schema="silver",
-        con=engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=5000,
-    )
-    logger.info(f"Na-insert ang {len(df_exploded)} rows sa silver.movie_genres")
+    writer = SilverTableWriter(engine)
+    writer.write(df_exploded, "movie_genres")
     assert len(df_exploded) > 0, "Zero rows sa silver.movie_genres — may problema sa explode"
 
     return df_exploded
@@ -444,16 +436,8 @@ def transform_production_companies(engine, df_extended):
     df_exploded = df_exploded.rename(columns={"id": "movie_id"})
     df_exploded = df_exploded[["movie_id", "company_name"]]
 
-    df_exploded.to_sql(
-        name="production_companies",
-        schema="silver",
-        con=engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=5000,
-    )
-    logger.info(f"Na-insert ang {len(df_exploded)} rows sa silver.production_companies")
+    writer = SilverTableWriter(engine)
+    writer.write(df_exploded, "production_companies")
     assert len(df_exploded) > 0, "Zero rows sa silver.production_companies — may problema sa explode"
 
     return df_exploded
@@ -535,16 +519,8 @@ def transform_producing_countries(engine, df_extended, df_enriched):
         & df_result["country_name"].notna() & (df_result["country_name"] != "")
     ].copy()
 
-    df_result.to_sql(
-        name="producing_countries",
-        schema="silver",
-        con=engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=5000,
-    )
-    logger.info(f"Na-insert ang {len(df_result)} rows sa silver.producing_countries")
+    writer = SilverTableWriter(engine)
+    writer.write(df_result, "producing_countries")
     assert len(df_result) > 0, "Zero rows sa silver.producing_countries — may problema sa transform"
 
     return df_result
@@ -616,16 +592,8 @@ def transform_spoken_languages(engine, df_extended, df_enriched):
         & df_result["language_name"].notna() & (df_result["language_name"] != "")
     ].copy()
 
-    df_result.to_sql(
-        name="spoken_languages",
-        schema="silver",
-        con=engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=5000,
-    )
-    logger.info(f"Na-insert ang {len(df_result)} rows sa silver.spoken_languages")
+    writer = SilverTableWriter(engine)
+    writer.write(df_result, "spoken_languages")
     assert len(df_result) > 0, "Zero rows sa silver.spoken_languages — may problema sa transform"
 
     return df_result

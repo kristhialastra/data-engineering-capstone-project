@@ -142,17 +142,38 @@ with DAG(
         ddl_silver >> enrich_silver >> transform_silver >> validate_silver
 
     # =============================================================
-    # GOLD LAYER (to be added)
+    # GOLD LAYER
+    # dbt models: staging views → intermediate views → mart tables
+    # Runs inside dbt-model container at /usr/app/movies
     # =============================================================
-    # with TaskGroup('gold_tasks') as gold_tasks:
-    #     dbt_run = BashOperator(...)
-    #     dbt_test = BashOperator(...)
-    #     dbt_run >> dbt_test
+    with TaskGroup("gold_tasks") as gold_tasks:
+
+        # Task 1: dbt run — materialize all staging, intermediate, and mart models
+        # Staging = views (always fresh), Intermediate = views, Marts = tables
+        # Targets gold schema sa PostgreSQL
+        dbt_run = BashOperator(
+            task_id="dbt_run",
+            bash_command="docker exec dbt-model dbt run --project-dir /usr/app/movies --profiles-dir /usr/app/movies",
+            doc="dbt run: materialize staging views, intermediate views, and mart tables "
+                "into the gold schema. Sources from silver layer via source() macro.",
+        )
+
+        # Task 2: dbt test — run generic tests (not_null, unique, accepted_values)
+        # and singular tests (scope validation, orphan bridges, YoY math, etc.)
+        # Kung may failure, mag-exit(1) — pipeline stops dito
+        dbt_test = BashOperator(
+            task_id="dbt_test",
+            bash_command="docker exec dbt-model dbt test --project-dir /usr/app/movies --profiles-dir /usr/app/movies",
+            doc="dbt test: run generic tests (not_null, unique, accepted_values) and "
+                "singular tests (scope years, orphan bridges, genre pct logic, "
+                "budget tier coverage, YoY delta math, service restriction regions).",
+        )
+
+        dbt_run >> dbt_test
 
     # =============================================================
     # CROSS-LAYER DEPENDENCIES
     # Bronze must pass validation bago mag-start ang Silver
+    # Silver must pass validation bago mag-start ang Gold
     # =============================================================
-    bronze_tasks >> silver_tasks
-
-    # bronze_tasks >> silver_tasks >> gold_tasks  # buong chain kapag kumpleto na
+    bronze_tasks >> silver_tasks >> gold_tasks
