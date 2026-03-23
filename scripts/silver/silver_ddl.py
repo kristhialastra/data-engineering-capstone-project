@@ -25,7 +25,7 @@ TABLES = {
         "drop_first": False,
         "columns": {
             "movie_id": {"type": "BIGINT NOT NULL", "comment": "Unique identifier ng movie, deduplicated mula sa bronze.movies_main"},
-            "title": {"type": "VARCHAR(500)", "comment": "Opisyal na title ng movie, trimmed"},
+            "movie_title": {"type": "VARCHAR(500)", "comment": "Opisyal na title ng movie, trimmed"},
             "release_date": {"type": "DATE", "comment": "Petsa ng release, na-parse mula sa mixed formats"},
             "budget": {"type": "NUMERIC(15,2)", "comment": "Budget sa USD — bronze value kung >0, else TMDB enriched value, else NULL"},
             "revenue": {"type": "NUMERIC(15,2)", "comment": "Revenue sa USD — bronze value kung >0, else TMDB enriched value, else NULL"},
@@ -64,6 +64,9 @@ TABLES = {
             "movie_id": {"type": "BIGINT NOT NULL", "comment": "TMDB movie ID, foreign key sa silver.movies"},
             "iso_country_code": {"type": "VARCHAR(10) NOT NULL", "comment": "ISO 3166-1 alpha-2 country code — one row per country per movie"},
             "country_name": {"type": "VARCHAR(255) NOT NULL", "comment": "English country name mula sa pycountry (o manual fallback para sa historic countries)"},
+            "country_region": {"type": "VARCHAR(50)", "comment": "Prime Video region: NA, LATAM, EMEA, o APAC batay sa geographic location ng bansa"},
+            "country_subregion": {"type": "VARCHAR(50)", "comment": "Prime Video subregion e.g. Western Europe, DACH, Nordics, CEE, MENA, South Asia, etc."},
+            "is_service_restricted": {"type": "BOOLEAN DEFAULT FALSE", "comment": "TRUE kung ang Prime Video ay hindi available bilang platform sa bansang ito (e.g. CN, RU, BY, KP, IR, SY, CU, AQ) — hindi naman ibig sabihin ay hindi ma-stream ang pelikula mula sa bansang ito"},
         }
     },
     "spoken_languages": {
@@ -155,6 +158,45 @@ def main():
                 config["columns"],
                 drop_first=config.get("drop_first", False),
             )
+
+            # Para sa movies: i-rename ang title → movie_title kung hindi pa na-rename
+            # Idempotent — DO block checks kung nandoon pa ang lumang column name
+            if table_name == "movies":
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'silver' AND table_name = 'movies'
+                                AND column_name = 'title'
+                            ) THEN
+                                ALTER TABLE silver.movies RENAME COLUMN title TO movie_title;
+                            END IF;
+                        END $$;
+                    """))
+                    conn.commit()
+                logger.info("ALTER TABLE: title renamed to movie_title in silver.movies (if needed)")
+
+            # Para sa producing_countries: ALTER TABLE muna bago mag-comment
+            # Kailangan kasi ang new columns ay dapat na exist bago ma-COMMENT ON COLUMN
+            if table_name == "producing_countries":
+                with engine.connect() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE silver.producing_countries "
+                        "ADD COLUMN IF NOT EXISTS country_region VARCHAR(50)"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE silver.producing_countries "
+                        "ADD COLUMN IF NOT EXISTS country_subregion VARCHAR(50)"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE silver.producing_countries "
+                        "ADD COLUMN IF NOT EXISTS is_service_restricted BOOLEAN DEFAULT FALSE"
+                    ))
+                    conn.commit()
+                logger.info("ALTER TABLE: country_region, country_subregion, is_service_restricted added to silver.producing_countries")
+
             add_column_comments(engine, table_name, config["columns"])
 
         logger.info("=== Silver DDL TAPOS NA — lahat ng tables at comments na-create na ===")
