@@ -36,11 +36,195 @@ COUNTRY_FALLBACK = {
     "XC": "Czechoslovakia",
     "XG": "East Germany",
     "YU": "Yugoslavia",
+    "AN": "Netherlands Antilles",   # dissolved 2010, not in pycountry
+    "CS": "Serbia and Montenegro",  # old code, not in pycountry
+    "XK": "Kosovo",                 # disputed territory, not in pycountry
 }
 LANGUAGE_FALLBACK = {
     "cn": "Cantonese",
     "xx": "No Language",
 }
+
+# === Company Name Normalizations ===
+# Normalize minority variant → majority variant (based on row count in dataset)
+COMPANY_NORMALIZATIONS = {
+    "Columbia Pictures": "Columbia Pictures Corporation",  # 429 → 448 movies
+}
+
+# === Prime Video Region Map ===
+# All countries mapped to their actual geographic region/subregion.
+# Service restrictions are tracked separately via SERVICE_RESTRICTED_COUNTRIES.
+REGION_MAP = {
+    # NA
+    "US": ("NA", "United States"),
+    "CA": ("NA", "Canada"),
+    "BM": ("NA", "Canada"),           # Bermuda — closest NA territory
+    # LATAM — Brazil
+    "BR": ("LATAM", "Brazil"),
+    # LATAM — Hispanic LATAM
+    "AR": ("LATAM", "Hispanic LATAM"), "BO": ("LATAM", "Hispanic LATAM"),
+    "CL": ("LATAM", "Hispanic LATAM"), "CO": ("LATAM", "Hispanic LATAM"),
+    "CR": ("LATAM", "Hispanic LATAM"), "CU": ("LATAM", "Hispanic LATAM"),
+    "DO": ("LATAM", "Hispanic LATAM"), "EC": ("LATAM", "Hispanic LATAM"),
+    "GT": ("LATAM", "Hispanic LATAM"), "HN": ("LATAM", "Hispanic LATAM"),
+    "JM": ("LATAM", "Hispanic LATAM"), "MX": ("LATAM", "Hispanic LATAM"),
+    "NI": ("LATAM", "Hispanic LATAM"), "PA": ("LATAM", "Hispanic LATAM"),
+    "PE": ("LATAM", "Hispanic LATAM"), "PR": ("LATAM", "Hispanic LATAM"),
+    "PY": ("LATAM", "Hispanic LATAM"), "SV": ("LATAM", "Hispanic LATAM"),
+    "TT": ("LATAM", "Hispanic LATAM"), "UY": ("LATAM", "Hispanic LATAM"),
+    "VE": ("LATAM", "Hispanic LATAM"),
+    "AN": ("LATAM", "Hispanic LATAM"),  # Netherlands Antilles (dissolved)
+    "AW": ("LATAM", "Hispanic LATAM"),  # Aruba
+    "BB": ("LATAM", "Hispanic LATAM"),  # Barbados
+    "GD": ("LATAM", "Hispanic LATAM"),  # Grenada
+    "KY": ("LATAM", "Hispanic LATAM"),  # Cayman Islands
+    "MQ": ("LATAM", "Hispanic LATAM"),  # Martinique
+    "BS": ("LATAM", "Hispanic LATAM"),  # Bahamas
+    "HT": ("LATAM", "Hispanic LATAM"),  # Haiti
+    # EMEA — Western Europe
+    "GB": ("EMEA", "Western Europe"), "FR": ("EMEA", "Western Europe"),
+    "IE": ("EMEA", "Western Europe"), "PT": ("EMEA", "Western Europe"),
+    "IT": ("EMEA", "Western Europe"), "ES": ("EMEA", "Western Europe"),
+    "GI": ("EMEA", "Western Europe"), "MT": ("EMEA", "Western Europe"),
+    "BE": ("EMEA", "Western Europe"), "NL": ("EMEA", "Western Europe"),
+    "MC": ("EMEA", "Western Europe"),   # Monaco
+    # EMEA — DACH
+    "DE": ("EMEA", "DACH"), "AT": ("EMEA", "DACH"), "CH": ("EMEA", "DACH"),
+    "LI": ("EMEA", "DACH"), "LU": ("EMEA", "DACH"),
+    "XG": ("EMEA", "DACH"),             # East Germany → reunified into DE
+    # EMEA — Nordics
+    "SE": ("EMEA", "Nordics"), "NO": ("EMEA", "Nordics"),
+    "DK": ("EMEA", "Nordics"), "FI": ("EMEA", "Nordics"), "IS": ("EMEA", "Nordics"),
+    "FO": ("EMEA", "Nordics"),  # Faroe Islands
+    "GL": ("EMEA", "Nordics"),  # Greenland
+    # EMEA — CEE
+    "PL": ("EMEA", "CEE"), "CZ": ("EMEA", "CEE"), "SK": ("EMEA", "CEE"),
+    "HU": ("EMEA", "CEE"), "RO": ("EMEA", "CEE"), "BG": ("EMEA", "CEE"),
+    "HR": ("EMEA", "CEE"), "SI": ("EMEA", "CEE"), "RS": ("EMEA", "CEE"),
+    "ME": ("EMEA", "CEE"), "MK": ("EMEA", "CEE"), "MD": ("EMEA", "CEE"),
+    "AL": ("EMEA", "CEE"), "BA": ("EMEA", "CEE"), "BY": ("EMEA", "CEE"),
+    "UA": ("EMEA", "CEE"), "GE": ("EMEA", "CEE"), "TR": ("EMEA", "CEE"),
+    "CY": ("EMEA", "CEE"), "GR": ("EMEA", "CEE"),
+    "RU": ("EMEA", "CEE"),              # Russia — geographically Eastern Europe
+    "XK": ("EMEA", "CEE"),             # Kosovo (disputed territory)
+    "EE": ("EMEA", "CEE"), "LT": ("EMEA", "CEE"), "LV": ("EMEA", "CEE"),
+    "SU": ("EMEA", "CEE"),             # Soviet Union — successor states mostly CEE
+    "XC": ("EMEA", "CEE"),             # Czechoslovakia → CZ+SK
+    "YU": ("EMEA", "CEE"),             # Yugoslavia → successor states
+    "CS": ("EMEA", "CEE"),             # Serbia and Montenegro (old code)
+    # EMEA — MENA
+    "EG": ("EMEA", "MENA"), "SA": ("EMEA", "MENA"), "AE": ("EMEA", "MENA"),
+    "IQ": ("EMEA", "MENA"), "JO": ("EMEA", "MENA"), "KW": ("EMEA", "MENA"),
+    "LB": ("EMEA", "MENA"), "QA": ("EMEA", "MENA"), "PS": ("EMEA", "MENA"),
+    "DZ": ("EMEA", "MENA"), "TN": ("EMEA", "MENA"), "MA": ("EMEA", "MENA"),
+    "LY": ("EMEA", "MENA"), "MR": ("EMEA", "MENA"), "YE": ("EMEA", "MENA"),
+    "OM": ("EMEA", "MENA"), "BH": ("EMEA", "MENA"), "IL": ("EMEA", "MENA"),
+    "TF": ("EMEA", "MENA"),
+    "SY": ("EMEA", "MENA"),            # Syria — geographically MENA
+    "IR": ("EMEA", "MENA"),            # Iran — geographically MENA
+    # EMEA — Sub-Saharan Africa
+    "ZA": ("EMEA", "Sub-Saharan Africa"), "NG": ("EMEA", "Sub-Saharan Africa"),
+    "KE": ("EMEA", "Sub-Saharan Africa"), "ET": ("EMEA", "Sub-Saharan Africa"),
+    "GH": ("EMEA", "Sub-Saharan Africa"), "TZ": ("EMEA", "Sub-Saharan Africa"),
+    "UG": ("EMEA", "Sub-Saharan Africa"), "RW": ("EMEA", "Sub-Saharan Africa"),
+    "CM": ("EMEA", "Sub-Saharan Africa"), "CI": ("EMEA", "Sub-Saharan Africa"),
+    "SN": ("EMEA", "Sub-Saharan Africa"), "AO": ("EMEA", "Sub-Saharan Africa"),
+    "MG": ("EMEA", "Sub-Saharan Africa"), "MZ": ("EMEA", "Sub-Saharan Africa"),
+    "BW": ("EMEA", "Sub-Saharan Africa"), "ZW": ("EMEA", "Sub-Saharan Africa"),
+    "CD": ("EMEA", "Sub-Saharan Africa"), "ML": ("EMEA", "Sub-Saharan Africa"),
+    "BF": ("EMEA", "Sub-Saharan Africa"), "GN": ("EMEA", "Sub-Saharan Africa"),
+    "LR": ("EMEA", "Sub-Saharan Africa"), "CF": ("EMEA", "Sub-Saharan Africa"),
+    "SO": ("EMEA", "Sub-Saharan Africa"), "ZM": ("EMEA", "Sub-Saharan Africa"),
+    "MW": ("EMEA", "Sub-Saharan Africa"), "TD": ("EMEA", "Sub-Saharan Africa"),
+    "IO": ("EMEA", "Sub-Saharan Africa"),
+    "NA": ("EMEA", "Sub-Saharan Africa"),  # Namibia
+    "CG": ("EMEA", "Sub-Saharan Africa"),  # Congo (Republic)
+    "AQ": ("EMEA", "Sub-Saharan Africa"),  # Antarctica — no real region, placeholder
+    # APAC — South Asia
+    "IN": ("APAC", "South Asia"), "PK": ("APAC", "South Asia"),
+    "BD": ("APAC", "South Asia"), "LK": ("APAC", "South Asia"),
+    "NP": ("APAC", "South Asia"), "BT": ("APAC", "South Asia"),
+    "AF": ("APAC", "South Asia"),
+    # APAC — North Asia
+    "JP": ("APAC", "North Asia"), "KR": ("APAC", "North Asia"),
+    "TW": ("APAC", "North Asia"), "HK": ("APAC", "North Asia"),
+    "MO": ("APAC", "North Asia"), "MN": ("APAC", "North Asia"),
+    "KP": ("APAC", "North Asia"),      # North Korea — geographically North Asia
+    # APAC — SEA
+    "ID": ("APAC", "SEA"), "TH": ("APAC", "SEA"), "PH": ("APAC", "SEA"),
+    "MY": ("APAC", "SEA"), "SG": ("APAC", "SEA"), "VN": ("APAC", "SEA"),
+    "KH": ("APAC", "SEA"), "LA": ("APAC", "SEA"), "MM": ("APAC", "SEA"),
+    "BN": ("APAC", "SEA"), "TL": ("APAC", "SEA"),
+    # APAC — ANZ
+    "AU": ("APAC", "ANZ"), "NZ": ("APAC", "ANZ"),
+    "PG": ("APAC", "ANZ"),
+    # APAC — Central Asia
+    "KZ": ("APAC", "Central Asia"), "UZ": ("APAC", "Central Asia"),
+    "TJ": ("APAC", "Central Asia"), "KG": ("APAC", "Central Asia"),
+    "AZ": ("APAC", "Central Asia"), "AM": ("APAC", "Central Asia"),
+    "TM": ("APAC", "Central Asia"),
+    # APAC — Other APAC
+    "CN": ("APAC", "Other APAC"),      # Mainland China — geographically APAC
+    "GU": ("APAC", "Other APAC"),
+    "PF": ("APAC", "Other APAC"),
+    "UM": ("APAC", "Other APAC"),
+    "WS": ("APAC", "Other APAC"),
+}
+
+# === Service Area Restrictions ===
+# Countries where Prime Video is NOT available as a platform.
+# Content FROM these countries can still stream globally.
+SERVICE_RESTRICTED_COUNTRIES = {"CN", "RU", "BY", "KP", "IR", "SY", "CU", "AQ"}
+
+
+def get_region(iso_code):
+    """Return (region, subregion) tuple for a given ISO country code.
+    Returns (None, None) for any code not in REGION_MAP."""
+    return REGION_MAP.get(iso_code, (None, None))
+
+
+def check_service_restricted(iso_code):
+    """Return True if Prime Video platform is not available in this country."""
+    return iso_code in SERVICE_RESTRICTED_COUNTRIES
+
+
+class SilverTableWriter:
+    """
+    Handles writing a Pandas DataFrame to a Silver schema table in PostgreSQL.
+
+    Encapsulates the to_sql call so transform functions don't repeat
+    connection parameters, chunksize, and error handling boilerplate.
+
+    Usage:
+        writer = SilverTableWriter(engine)
+        writer.write(df, "movies")
+    """
+
+    CHUNKSIZE = 5000
+
+    def __init__(self, engine):
+        self.engine = engine
+
+    def write(self, df: pd.DataFrame, table_name: str) -> int:
+        """
+        Append-insert df into silver.<table_name>.
+        Returns number of rows written.
+        Raises ValueError if df is empty.
+        """
+        if df.empty:
+            raise ValueError(f"Cannot write empty DataFrame to silver.{table_name}")
+
+        df.to_sql(
+            name=table_name,
+            schema="silver",
+            con=self.engine,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=self.CHUNKSIZE,
+        )
+        logger.info(f"Na-insert ang {len(df)} rows sa silver.{table_name}")
+        return len(df)
 
 
 def get_engine():
@@ -170,18 +354,10 @@ def transform_movies(engine, df_main, df_enriched):
     df_merged["title"] = df_merged["title"].str.strip()
 
     df_movies = df_merged[["id", "title", "release_date", "budget", "revenue"]].copy()
-    df_movies = df_movies.rename(columns={"id": "movie_id"})
+    df_movies = df_movies.rename(columns={"id": "movie_id", "title": "movie_title"})
 
-    df_movies.to_sql(
-        name="movies",
-        schema="silver",
-        con=engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=5000,
-    )
-    logger.info(f"Na-insert ang {len(df_movies)} rows sa silver.movies")
+    writer = SilverTableWriter(engine)
+    writer.write(df_movies, "movies")
     assert len(df_movies) > 0, "Zero rows sa silver.movies — may problema sa transform"
 
     return df_movies
@@ -256,6 +432,15 @@ def transform_production_companies(engine, df_extended):
     df_exploded["company_name"] = df_exploded["company_name"].str.strip()
     df_exploded = df_exploded[df_exploded["company_name"].notna() & (df_exploded["company_name"] != "")].copy()
 
+    # Drop standalone "The" — parsing artifact (151 rows), not a real company name
+    before_the = len(df_exploded)
+    df_exploded = df_exploded[df_exploded["company_name"].str.lower() != "the"].copy()
+    logger.info(f"  'The' artifact removed: {before_the - len(df_exploded)} rows dropped")
+
+    # Normalize duplicate studio name variants → most-used variant
+    df_exploded["company_name"] = df_exploded["company_name"].replace(COMPANY_NORMALIZATIONS)
+    logger.info(f"  Company normalizations applied: {list(COMPANY_NORMALIZATIONS.keys())}")
+
     df_exploded = df_exploded.rename(columns={"id": "movie_id"})
     df_exploded = df_exploded[["movie_id", "company_name"]]
 
@@ -313,10 +498,14 @@ def transform_producing_countries(engine, df_extended, df_enriched):
                     parts = pair.split(":", 1)
                     if len(parts) == 2 and parts[0].strip():
                         iso = parts[0].strip()
+                        region, subregion = get_region(iso)
                         rows.append({
                             "movie_id": movie_id,
                             "iso_country_code": iso,
                             "country_name": get_country_name(iso),
+                            "country_region": region,
+                            "country_subregion": subregion,
+                            "is_service_restricted": check_service_restricted(iso),
                         })
             continue
 
@@ -325,10 +514,14 @@ def transform_producing_countries(engine, df_extended, df_enriched):
             iso = entry.get("iso_3166_1", "").strip()
             if not iso:
                 continue
+            region, subregion = get_region(iso)
             rows.append({
                 "movie_id": movie_id,
                 "iso_country_code": iso,
                 "country_name": get_country_name(iso),
+                "country_region": region,
+                "country_subregion": subregion,
+                "is_service_restricted": check_service_restricted(iso),
             })
 
     df_result = pd.DataFrame(rows)
