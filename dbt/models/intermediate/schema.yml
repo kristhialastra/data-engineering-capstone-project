@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: int_yearly_movie_trends
+    description: >
+      Year-over-year movie production aggregates with LAG/LEAD window functions.
+      One row per release year (1980-2015). Feeds mart_yearly_trends.
+    columns:
+      - name: release_year
+        description: Calendar year. Primary grain for this model.
+        tests:
+          - not_null
+          - unique
+      - name: movie_count
+        description: Distinct movies released in this year.
+        tests:
+          - not_null
+      - name: yoy_movie_count_delta
+        description: Movie count change vs previous year (NULL for 1980).
+      - name: yoy_movie_count_pct
+        description: YoY % change in movie count (NULL for 1980).
+      - name: rolling_3yr_avg_movies
+        description: 3-year rolling average of movie count (includes current + 2 prior years).
+
+  - name: int_movie_financials
+    description: >
+      Per-movie financial metrics with budget/revenue tier classification and
+      rank within release year. Uses classify_budget macro for tier labels.
+      LAG/LEAD windows show neighboring budget values for anomaly context.
+    columns:
+      - name: movie_id
+        description: Primary key — TMDB movie ID.
+        tests:
+          - not_null
+          - unique
+      - name: budget_tier
+        description: Budget tier from classify_budget macro (Blockbuster/Mid-Range/Low-Budget/Micro-Budget/Unknown).
+        tests:
+          - accepted_values:
+              values: ['Blockbuster', 'Mid-Range', 'Low-Budget', 'Micro-Budget', 'Unknown']
+      - name: revenue_rank_in_year
+        description: Revenue rank within the movie's release year (1 = highest earner).

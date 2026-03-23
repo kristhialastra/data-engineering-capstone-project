@@ -6,7 +6,7 @@ Manually triggered — walang schedule, i-trigger lang kapag kailangan.
 
 Layers:
 - Bronze: Raw data mula sa GCS bucket, lahat TEXT, walang transforms
-- Silver: (to be added) Cleaned, typed, validated data
+- Silver: Typed tables + TMDB API enrichment para sa missing budget/revenue/genres
 - Gold: (to be added) Business-ready aggregations gamit dbt
 
 Bawat layer ay naka-TaskGroup para organized sa Airflow UI.
@@ -86,14 +86,60 @@ with DAG(
         ddl_bronze >> load_bronze >> validate_bronze
 
     # =============================================================
-    # SILVER LAYER (to be added)
+    # SILVER LAYER
+    # Typed tables, TMDB API enrichment, transform, at validation
     # =============================================================
-    # with TaskGroup('silver_tasks') as silver_tasks:
-    #     ddl_silver = BashOperator(...)
-    #     enrich_silver = BashOperator(...)
-    #     transform_silver = BashOperator(...)
-    #     validate_silver = BashOperator(...)
-    #     ddl_silver >> enrich_silver >> transform_silver >> validate_silver
+    with TaskGroup("silver_tasks") as silver_tasks:
+
+        # Task 1: Gawa ng silver schema at typed tables kung wala pa
+        # INTEGER, DATE, NUMERIC columns — hindi na lahat TEXT tulad ng Bronze
+        # IF NOT EXISTS — safe i-rerun kahit existing na ang tables
+        ddl_silver = BashOperator(
+            task_id="ddl_silver",
+            bash_command="docker exec pandas-worker python /scripts/silver/silver_ddl.py",
+            doc="Gawa ng silver schema at typed tables (movies, movie_genres, "
+                "production_companies, movies_enriched). With COMMENTs.",
+        )
+
+        # Task 2: TMDB API enrichment para sa movies na may missing budget/revenue/genres
+        # Binabasa ang bronze rows na may 0/NULL values, tinatawagan ang TMDB API
+        # Results na-save sa silver.movies_enriched — supplement table, hindi replacement
+        # ~38K candidates at 20 req/sec = ~30 minutes runtime — normal ito
+        enrich_silver = BashOperator(
+            task_id="enrich_silver",
+            bash_command="docker exec pandas-worker python /scripts/silver/silver_enrich.py",
+            doc="TMDB API enrichment: basahin ang bronze rows na may missing "
+                "budget/revenue/genres, tawagin ang TMDB API, at i-save ang "
+                "results sa silver.movies_enriched.",
+        )
+
+        # Task 3: Transform bronze data → silver output tables
+        # Cast types, dedup IDs, parse mixed date formats, merge TMDB enrichment
+        # Explode genres at production companies sa separate tables
+        # Writes to silver.movies, silver.movie_genres, silver.production_companies
+        transform_silver = BashOperator(
+            task_id="transform_silver",
+            bash_command="docker exec pandas-worker python /scripts/silver/silver_transform.py",
+            doc="Transform bronze data: cast types, dedup, null handling, trim strings, "
+                "parse nested fields. Writes to silver.movies, silver.movie_genres, "
+                "silver.production_companies.",
+        )
+
+        # Task 4: Pandera schema validation ng lahat ng silver tables
+        # Column types, nullability rules, value ranges, uniqueness check
+        # Kung may failure, mag-exit(1) ang script — pipeline stops dito
+        # Hindi tayo magpo-proceed sa Gold kung hindi validated ang Silver
+        validate_silver = BashOperator(
+            task_id="validate_silver",
+            bash_command="docker exec pandas-worker python /scripts/silver/silver_validate.py",
+            doc="Pandera schema validation ng lahat ng silver tables: column types, "
+                "nullability rules, value ranges, uniqueness. SchemaError raised → "
+                "pipeline stops. Hindi tayo magpo-proceed sa Gold kung hindi validated.",
+        )
+
+        # Silver task dependencies — linear, strict ordering
+        # DDL → Enrich (TMDB API) → Transform (clean/dedup/explode) → Validate
+        ddl_silver >> enrich_silver >> transform_silver >> validate_silver
 
     # =============================================================
     # GOLD LAYER (to be added)
@@ -104,6 +150,9 @@ with DAG(
     #     dbt_run >> dbt_test
 
     # =============================================================
-    # CROSS-LAYER DEPENDENCIES (to be added)
+    # CROSS-LAYER DEPENDENCIES
+    # Bronze must pass validation bago mag-start ang Silver
     # =============================================================
-    # bronze_tasks >> silver_tasks >> gold_tasks
+    bronze_tasks >> silver_tasks
+
+    # bronze_tasks >> silver_tasks >> gold_tasks  # buong chain kapag kumpleto na
