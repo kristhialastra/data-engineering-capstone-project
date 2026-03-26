@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
 -- stg_movie_countries
--- One row per movie-country pair, scoped to 1980-2015.
+-- One row per movie-country pair, scoped to 1980-2016.
 -- Includes region, subregion, and service restriction flag.
 
 SELECT
