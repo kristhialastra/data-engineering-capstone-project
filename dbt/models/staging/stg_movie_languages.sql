@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
 -- stg_movie_languages
--- One row per movie-language pair, scoped to 1980-2015.
+-- One row per movie-language pair, scoped to 1980-2016.
 
 SELECT
     sl.movie_id,
