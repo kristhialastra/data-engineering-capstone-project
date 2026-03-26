@@ -187,7 +187,7 @@ GCS Bucket: internship-capstone-movies
 
 | Model | Type | Materialization | Grain / Purpose |
 |-------|------|----------------|----------------|
-| `fact_movies` | Fact | table | One row per movie (scope: 1980–2015) |
+| `fact_movies` | Fact | table | One row per movie (scope: 1980–2016) |
 | `bridge_movie_genres` | Bridge | table | movie_id ↔ genre (many-to-many) |
 | `bridge_movie_companies` | Bridge | table | movie_id ↔ company |
 | `bridge_movie_countries` | Bridge | table | movie_id ↔ producing country |
@@ -325,7 +325,7 @@ docker exec dbt-model sh -c "dbt test --project-dir /usr/app/movies --profiles-d
 
 | Layer | Folder | Materialization | Purpose |
 |-------|--------|----------------|---------|
-| Staging | `models/staging/` | view | Reads from silver via `{{ source() }}`, renames columns, applies scope filter (1980–2015) |
+| Staging | `models/staging/` | view | Reads from silver via `{{ source() }}`, renames columns, applies scope filter (1980–2016) |
 | Intermediate | `models/intermediate/` | view | Window functions (LAG/LEAD), financial rankings via `RANK()` |
 | Marts | `models/marts/` | table | Final star schema tables — loaded by Power BI |
 
@@ -413,12 +413,12 @@ Defined in `models/staging/schema.yml`, `models/intermediate/schema.yml`, `model
 
 | Test File | Asserts |
 |-----------|---------|
-| `assert_scope_years_valid.sql` | No movies outside 1980–2015 reach the gold layer |
+| `assert_scope_years_valid.sql` | No movies outside 1980–2016 reach the gold layer |
 | `assert_fact_movies_no_orphan_bridges.sql` | All bridge `movie_id`s exist in `fact_movies` |
 | `assert_no_duplicate_genres_per_movie.sql` | No duplicate (movie_id, genre) pairs in bridge |
 | `assert_genre_pct_sums_over_100.sql` | Genre % sums exceed 100% (valid — multi-genre movies) |
 | `assert_service_restricted_countries_have_region.sql` | Restricted countries (CN, RU, KP…) retain valid region + subregion |
-| `assert_yearly_trends_complete_scope.sql` | All 36 years (1980–2015) present in `mart_yearly_trends` |
+| `assert_yearly_trends_complete_scope.sql` | All 37 years (1980–2016) present in `mart_yearly_trends` |
 | `assert_budget_tier_coverage.sql` | No NULL `budget_tier` — `classify_budget` macro covers all ranges |
 | `assert_yoy_delta_math.sql` | `yoy_delta == movie_count - LAG(movie_count)` for every row with a prior year |
 | `assert_fact_counts_non_negative.sql` | All count columns in fact table are ≥ 0 |
