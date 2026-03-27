@@ -16,6 +16,19 @@ End-to-end movies data pipeline ingesting raw CSVs from Google Cloud Storage, tr
 - Enriches ~38K movies with missing budget/revenue/genre data via the TMDB API (3 keys, round-robin)
 - Materializes a star schema in PostgreSQL `gold` schema via dbt, ready for Power BI Import mode
 
++++ NEW: New-Device Reproducibility Guides +++
+
+If you need to move this project to another laptop or desktop, start with these runbooks:
+
+- [Start Here: New-Device Reproducibility Checklist](docs/01_start_here_checklist.md)
+- [New Device Setup and Pipeline Run](docs/02_new_device_setup_and_pipeline_run.md)
+- [Power BI Refresh and Dashboard Rebuild](docs/03_power_bi_refresh_and_dashboard_rebuild.md)
+- [Validation and Troubleshooting](docs/04_validation_and_troubleshooting.md)
+
+These guides are written for a first-time setup on a different machine and are intended to reduce dashboard rebuild work when transferring the project.
+
++++ END NEW: New-Device Reproducibility Guides +++
+
 ![System Architecture](docs/system_architecture.jpg)
 
 ### Tech Stack
