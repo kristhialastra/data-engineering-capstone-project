@@ -1,0 +1,79 @@
+version: 2
+
+sources:
+  - name: silver
+    description: >
+      Silver layer tables — cleaned, deduplicated, and type-cast data
+      from the Bronze ingestion layer. Produced by silver_transform.py.
+    schema: silver
+    tables:
+      - name: movies
+        description: >
+          One row per movie. Deduplicated, date-parsed, budget/revenue filled
+          from TMDB enrichment. Grain: movie_id.
+        columns:
+          - name: movie_id
+            description: Primary key — TMDB movie ID.
+          - name: movie_title
+            description: Cleaned movie title (stripped whitespace).
+          - name: release_date
+            description: Parsed release date (DATE).
+          - name: budget
+            description: Production budget in USD. NULL when unreported or zero.
+          - name: revenue
+            description: Box office revenue in USD. NULL when unreported or zero.
+
+      - name: movie_genres
+        description: >
+          One row per movie-genre pair. Genres sourced from bronze + TMDB enrichment.
+          Known issue: some upstream records have genres duplicated — filtered in stg_movie_genres.
+        columns:
+          - name: movie_id
+            description: Foreign key → silver.movies.movie_id
+          - name: genre
+            description: Genre label (e.g. Action, Drama, Comedy).
+
+      - name: production_companies
+        description: >
+          One row per movie-company pair. Company names cleaned:
+          "The" artifact removed, Columbia Pictures variants normalized.
+        columns:
+          - name: movie_id
+            description: Foreign key → silver.movies.movie_id
+          - name: company_name
+            description: Production company name.
+
+      - name: producing_countries
+        description: >
+          One row per movie-country pair. ISO 3166-1 alpha-2 codes resolved to
+          English names via pycountry. Enriched with Prime Video region/subregion
+          taxonomy and service restriction flag.
+        columns:
+          - name: movie_id
+            description: Foreign key → silver.movies.movie_id
+          - name: iso_country_code
+            description: ISO 3166-1 alpha-2 country code.
+          - name: country_name
+            description: English country name (pycountry + manual fallback for historic codes).
+          - name: country_region
+            description: Prime Video geographic region (NA, LATAM, EMEA, APAC).
+          - name: country_subregion
+            description: >
+              Prime Video subregion (e.g. Western Europe, DACH, Nordics, CEE,
+              MENA, Sub-Saharan Africa, South Asia, North Asia, SEA, ANZ, Central Asia).
+          - name: is_service_restricted
+            description: >
+              TRUE if Prime Video is not available in this country as a platform
+              (CN, RU, BY, KP, IR, SY, CU, AQ). Does not affect content origin classification.
+
+      - name: spoken_languages
+        description: >
+          One row per movie-language pair. ISO 639-1 codes resolved to English
+          language names via pycountry + manual fallback (cn=Cantonese, xx=No Language).
+        columns:
+          - name: movie_id
+            description: Foreign key → silver.movies.movie_id
+          - name: iso_language_code
+            description: ISO 639-1 language code.
+          - name: language_name
+            description: English language name.
