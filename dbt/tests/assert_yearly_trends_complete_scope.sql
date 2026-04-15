@@ -1,10 +1,10 @@
 -- assert_yearly_trends_complete_scope
 -- mart_yearly_trends must have exactly one row per year for every year
--- from 1980 to 2015 — 36 years total, no gaps allowed.
+-- from 1980 to 2016 — 37 years total, no gaps allowed.
 -- Returns missing years — expect 0.
 
 WITH expected_years AS (
-    SELECT generate_series(1980, 2015) AS release_year
+    SELECT generate_series(1980, 2016) AS release_year
 )
 SELECT e.release_year
 FROM expected_years e

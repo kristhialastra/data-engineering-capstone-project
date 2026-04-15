@@ -3,7 +3,7 @@
 -- fact_movies
 -- Grain: one row per movie (movie_title).
 -- Core movie metrics with pre-aggregated counts for Power BI.
--- Scoped to 1980-2015 via stg_movies.
+-- Scoped to 1980-2016 via stg_movies.
 
 SELECT
     m.movie_id,

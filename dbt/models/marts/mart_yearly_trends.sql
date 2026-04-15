@@ -2,7 +2,7 @@
 
 -- mart_yearly_trends
 -- Year-over-year movie production trends for Power BI line/bar charts.
--- Grain: one row per release year (1980-2015).
+-- Grain: one row per release year (1980-2016).
 -- Sources from int_yearly_movie_trends which contains LAG/LEAD window functions.
 
 SELECT

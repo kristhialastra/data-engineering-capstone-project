@@ -4,7 +4,7 @@ models:
   - name: int_yearly_movie_trends
     description: >
       Year-over-year movie production aggregates with LAG/LEAD window functions.
-      One row per release year (1980-2015). Feeds mart_yearly_trends.
+      One row per release year (1980-2016). Feeds mart_yearly_trends.
     columns:
       - name: release_year
         description: Calendar year. Primary grain for this model.

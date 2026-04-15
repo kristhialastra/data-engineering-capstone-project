@@ -5,7 +5,7 @@ models:
     description: >
       Core movie fact table. Grain: one row per movie (movie_id).
       Pre-aggregated genre/company/country/language counts for Power BI.
-      Scoped to 1980-2015 via stg_movies.
+      Scoped to 1980-2016 via stg_movies.
     columns:
       - name: movie_id
         description: Primary key — TMDB movie ID.
@@ -17,7 +17,7 @@ models:
         tests:
           - not_null
       - name: release_year
-        description: Integer release year (1980-2015).
+        description: Integer release year (1980-2016).
         tests:
           - not_null
       - name: genre_count
@@ -102,13 +102,13 @@ models:
         tests:
           - not_null
       - name: movie_count
-        description: Distinct movies produced in this country (scoped 1980-2015).
+        description: Distinct movies produced in this country (scoped 1980-2016).
         tests:
           - not_null
 
   - name: mart_yearly_trends
     description: >
-      Year-over-year movie production trends. Grain: one row per year (1980-2015).
+      Year-over-year movie production trends. Grain: one row per year (1980-2016).
       Includes YoY delta, YoY %, and 3-year rolling average from int_yearly_movie_trends.
     columns:
       - name: release_year
